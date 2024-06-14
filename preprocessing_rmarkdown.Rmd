@@ -16,129 +16,298 @@ library(glue)
 library(repr)
 options(warn=-1)
 ```
-```{r}
-# library(subprocess
-# library(pandas as pd
-# library(chardet
-# library(numpy as np
-# library(matplotlib.pyplot as plt
-# library(os
-# library(Sys.glob
-# library(argparser
-# library(digest
-from lubridate # library(lubridate
-from configparser # library(config::get
-# library(sys
-# library(warnings
-# library(re
-warnings.filterwarnings('ignore')
-from numpy # library(random)
-```
+
 
 ```{r}
-dplyr::set_option('display.max_columns', None)
-dplyr::set_option('display.max_rows', 50))
+# Set options for data frame display
+options(tibble.width = Inf)
+options(tibble.print_max = 50)
 ```
 
 # **Functions**
 
 ```{r}
-def convert_to_snake_case(col_name):
-    # Remove '__c' from the column names
-    col_name = col_name.replace('__c', '')
-    
-    # Replace periods with underscores
-    col_name = col_name.replace('.', '_')
-    
-    # Convert camel case to snake case
-    # Handle the case where a lowercase letter or digit is followed by an uppercase letter
-    col_name = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', col_name)
-    
-    # Convert the entire string to lowercase
-    col_name = col_name.lower()
-    
-    # Replace multiple underscores with a single underscore
-    col_name = re.sub(r'_+', '_', col_name)
-    
-    return col_name)
+convert_to_snake_case <- function(col_name) {
+  # Remove '__c' from the column names
+  col_name <- gsub('__c', '', col_name)
+  
+  # Replace periods with underscores
+  col_name <- gsub('\\.', '_', col_name)
+  
+  # Convert camel case to snake case
+  # Handle the case where a lowercase letter or digit is followed by an uppercase letter
+  col_name <- gsub('([a-z0-9])([A-Z])', '\\1_\\2', col_name)
+  
+  # Convert the entire string to lowercase
+  col_name <- tolower(col_name)
+  
+  # Replace multiple underscores with a single underscore
+  col_name <- gsub('_+', '_', col_name)
+  
+  return(col_name)
+}
 ```
 
 ```{r}
-def intersection(lst1, lst2):
-    lst3 = [value for value in lst1 if value not in lst2]
-    return lst3)
-```
-
-```{r}
-# Define the function to check the condition in cells
-def contains_board_and_member(cell):
-    if isinstance(cell, str):
-        return 'board' in cell.lower() and 'member' in cell.lower() and \
-               ('past' not in cell.lower() and 'former' not in cell.lower())
-    return False
-
-def contains_board_and_member_past(cell):
-    if isinstance(cell, str):
-        return 'board' in cell.lower() and 'member' in cell.lower() and \
-               ('past' in cell.lower() or 'former' in cell.lower())
-    return False
-
-def contains_solicitor_and_president(cell):
-    if isinstance(cell, str):
-        return 'solicitor' in cell.lower() and 'president' in cell.lower() 
-    return False)
-```
-
-```{r}
-def pick_col(row, col1, col2):
-    x, y = row[col1], row[col2]
-    if dplyr::isna(x) and dplyr::isna(y):
-        return numpy::nan
-    elif dplyr::isna(x):
-        return y
-    elif dplyr::isna(y):
-        return x
-    elif x == y:
-        return x
-    else:
-        print(x, y)
-        return numpy::nan)
-```
-
-```{r}
-def df_merge_source(merged_df, left_source, right_source):
-    # Rename the '_merge' column to 'source'
-    new_col = "df_source"
-    while new_col in merged_df.columns:
-        i = 1
-        new_col = "df_source_%d" %i
-        i += 1
-        
-    merged_df.rename(columns={'_merge': new_col}, inplace=True)
-    
-    # Map the source column to more descriptive labels
-    source_mapping = {
-        'left_only': '%s' %left_source,
-        'right_only': '%s' %right_source,
-        'both': '%s/%s'%(left_source, right_source)
+# Define a function to convert entries to datetime
+convert_to_datetime <- function(entry) {
+  # Convert a given entry into a datetime object using R's as.POSIXct function.
+  # Args:
+  #   entry (character): The entry to convert to datetime.
+  # Returns:
+  #   POSIXct: Returns a POSIXct object if conversion is successful, otherwise NA.
+  
+  tryCatch({
+    # Try to parse as a full date
+    as.POSIXct(entry, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  }, error = function(e) {
+    # Check if it's a four-digit number (likely representing a year)
+    if (grepl("^\\d{4}$", entry)) {
+      as.POSIXct(paste0(entry, "-01-01"), format = "%Y-%m-%d", tz = "UTC")
+    } else {
+      # If it's neither a full date nor a valid year, return NA or handle as needed
+      NA
     }
-    merged_df[new_col] = merged_df[new_col].replace(source_mapping)
-    return merged_df)
+  })
+}
 ```
 
 ```{r}
-def remove_dollar_sign_and_comma(cell):
-    if isinstance(cell, str):
-        cell = cell.replace("$", "").replace(",", "")
-    return cell)
+# Function to check if the given value is a valid Roman numeral
+is_roman_numeral <- function(value) {
+  # Define a regular expression to match Roman numerals
+  roman_pattern <- "^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$"
+  
+  # Check if the value matches the Roman numeral pattern
+  return(grepl(roman_pattern, value))
+}
+
+# Function to check if the given value has a digit
+has_digit <- function(value) {
+  return(grepl("\\d", as.character(value)))
+}
+
+# Function to check if the given value is a Roman numeral or contains a digit
+roman_or_numeral <- function(value) {
+  if (is_roman_numeral(value) || has_digit(value)) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
+```
+
+
+```{r}
+# Function to find elements in lst1 that are not in lst2
+intersection_out <- function(lst1, lst2) {
+  lst3 <- lst1[!(lst1 %in% lst2)]
+  return(lst3)
+}
+
+# Function to find elements in lst1 that are also in lst2
+intersection_in <- function(lst1, lst2) {
+  lst3 <- lst1[lst1 %in% lst2]
+  return(lst3)
+}
+
+```
+
+
+```{r}
+# Function to check if a given string `cell` meets specific inclusion and exclusion criteria
+# 
+# Args:
+#   cell (character): The string to check.
+#   included_and (character vector, optional): List of keywords; cell must include all of these (case insensitive).
+#   included_or (character vector, optional): List of keywords; cell must include at least one of these (case insensitive).
+#   excluded_and (character vector, optional): List of keywords; cell must not include any of these (case insensitive).
+#   excluded_or (character vector, optional): List of keywords; cell must not include at least one of these (case insensitive).
+# 
+# Returns:
+#   logical: TRUE if `cell` meets all specified criteria, FALSE otherwise.
+# 
+generalized_contains <- function(cell, included_and=NULL, included_or=NULL, excluded_and=NULL, excluded_or=NULL) {
+  if (!is.character(cell)) {
+    return(FALSE)  # Return FALSE if `cell` is not a string
+  }
+  
+  cell_lower <- tolower(cell)  # Convert `cell` to lowercase
+  
+  # Check included_and condition
+  if (!is.null(included_and)) {
+    if (!all(sapply(included_and, function(keyword) grepl(keyword, cell_lower)))) {
+      return(FALSE)  # Return FALSE if `cell_lower` does not contain all keywords in `included_and`
+    }
+  }
+  
+  # Check included_or condition
+  if (!is.null(included_or)) {
+    if (!any(sapply(included_or, function(keyword) grepl(keyword, cell_lower)))) {
+      return(FALSE)  # Return FALSE if `cell_lower` does not contain any keyword in `included_or`
+    }
+  }
+  
+  # Check excluded_and condition
+  if (!is.null(excluded_and)) {
+    if (any(sapply(excluded_and, function(keyword) grepl(keyword, cell_lower)))) {
+      return(FALSE)  # Return FALSE if `cell_lower` contains any keyword in `excluded_and`
+    }
+  }
+  
+  # Check excluded_or condition
+  if (!is.null(excluded_or)) {
+    if (any(sapply(excluded_or, function(keyword) grepl(keyword, cell_lower)))) {
+      return(FALSE)  # Return FALSE if `cell_lower` contains any keyword in `excluded_or`
+    }
+  }
+  
+  return(TRUE)  # Return TRUE if all conditions are satisfied
+}
+
+### Example usage
+cell <- "This board member is a past chairperson."
+included_and <- c('board', 'member')
+included_or <- c('past', 'former')
+excluded_and <- NULL
+excluded_or <- NULL
+generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
+
+cell <- "This board member is a past chairperson."
+included_and <- c('board', 'member')
+included_or <- NULL
+excluded_and <- NULL
+excluded_or <- c('past', 'former')
+generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
+
+cell <- "prospect_manager_2nd"
+included_and <- NULL
+included_or <- c('prospect_manager', 'solicitor')
+excluded_and <- NULL
+excluded_or <- c("2")
+generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
 ```
 
 ```{r}
-def save_file(df, file_prefix = "constituents_cleaned", version="v1"):
-    if "Unique Donor ID" in df.columns:
-        df = df.dropna(subset="Unique Donor ID")
-    file_name = "%s_%s.csv" %(file_prefix, version)
-    df.to_csv("%s\\%s\\%s\\Cleaning\\%s" %(file_path, clients, subdir, file_name), index=False))
+# Function to pick a value from either col1 or col2 of a given row based on priority rules
+# 
+# Args:
+#   row (data.frame row): The row (data.frame row) from which to pick values.
+#   col1 (character): The name of the first column to consider.
+#   col2 (character): The name of the second column to consider.
+# 
+# Returns:
+#   object: The value from col1 or col2 based on the priority rules:
+#       - If both values are NA, returns NA.
+#       - If only one value is NA, returns the non-NA value.
+#       - If both values are equal and not NA, returns that value.
+#       - Otherwise, returns NA and prints the conflicting values (for debugging).
+# 
+pick_col <- function(row, col1, col2) {
+  x <- row[[col1]]
+  y <- row[[col2]]
+  
+  if (is.na(x) && is.na(y)) {
+    return(NA)  # Return NA if both values are NA
+  } else if (is.na(x)) {
+    return(y)   # Return y if x is NA
+  } else if (is.na(y)) {
+    return(x)   # Return x if y is NA
+  } else if (x == y) {
+    return(x)   # Return x (or y, since x == y) if both are equal and not NA
+  } else {
+    cat(paste(x, y, sep = " "), "\n")  # Print conflicting values for debugging
+    return(NA)  # Return NA for conflicting values
+  }
+}
+```
+
+```{r}
+# Function to rename the '_merge' column in the merged dataframe to a source indicator column,
+# and map its values to more descriptive labels based on merge sources.
+# 
+# Args:
+#   merged_df (data.frame): The merged dataframe resulting from a merge operation.
+#   left_source (character): The label for the left dataframe source.
+#   right_source (character): The label for the right dataframe source.
+# 
+# Returns:
+#   data.frame: The merged dataframe `merged_df` with the '_merge' column renamed to indicate source,
+#               and its values mapped to descriptive labels based on merge sources.
+# 
+df_merge_source <- function(merged_df, left_source, right_source) {
+  # Rename the '_merge' column to 'source'
+  new_col <- "df_source"
+  while (new_col %in% names(merged_df)) {
+    i <- 1
+    new_col <- paste0("df_source_", i)
+    i <- i + 1
+  }
+  
+  names(merged_df)[names(merged_df) == "_merge"] <- new_col
+  
+  # Map the source column to more descriptive labels
+  source_mapping <- list(
+    'left_only' = left_source,
+    'right_only' = right_source,
+    'both' = paste0(left_source, "/", right_source)
+  )
+  
+  merged_df[[new_col]] <- factor(merged_df[[new_col]], levels = names(source_mapping))
+  merged_df[[new_col]] <- factor(merged_df[[new_col]], labels = source_mapping)
+  
+  return(merged_df)
+}
+```
+
+```{r}
+# Function to remove dollar signs ('$') and commas (',') from a given string representation of a number
+# 
+# Args:
+#   cell (character or any): The string or value from which to remove dollar signs and commas.
+# 
+# Returns:
+#   character or any: The modified string with dollar signs and commas removed, or the original value if not a string.
+# 
+remove_dollar_sign_and_comma <- function(cell) {
+  if (is.character(cell)) {
+    cell <- gsub("\\$|,", "", cell)  # Remove dollar signs ('$') and commas (',')
+  }
+  return(cell)
+}
+```
+
+```{r}
+# Function to save a data frame to a CSV file with a specified file name format and path
+# 
+# Args:
+#   df (data.frame): The data frame to save.
+#   file_prefix (character, optional): The prefix for the CSV file name. Default is "constituents_cleaned".
+#   version (character, optional): The version identifier for the CSV file name. Default is "v1".
+# 
+# Returns:
+#   NULL
+# 
+save_file <- function(df, file_prefix = "constituents_cleaned", version = "v1") {
+  # Check if "Unique Donor ID" column exists and drop rows with NA values in that column
+  if ("Unique Donor ID" %in% names(df)) {
+    df <- df[!is.na(df[["Unique Donor ID"]]), ]
+  }
+  
+  # Construct file name based on file_prefix and version
+  file_name <- paste0(file_prefix, "_", version, ".csv")
+  
+  # Define file path components (replace with actual paths as needed)
+  file_path <- "/path/to/your/file"  # Replace with actual file path
+  clients <- "your_clients_folder"   # Replace with actual clients folder
+  subdir <- "your_subdirectory"      # Replace with actual subdirectory
+  
+  # Create directory structure if it doesn't exist
+  dir.create(file.path(file_path, clients, subdir, "Cleaning"), showWarnings = FALSE, recursive = TRUE)
+  
+  # Save data frame to CSV file
+  write.csv(df, file.path(file_path, clients, subdir, "Cleaning", file_name), row.names = FALSE)
+}
 ```
 
 # **Gifts Data**
