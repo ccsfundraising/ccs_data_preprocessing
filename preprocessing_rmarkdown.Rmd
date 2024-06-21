@@ -8,6 +8,7 @@ output: html_document
 # install.packages("tidyverse")
 # install.packages("lubridate")
 # install.packages("config")
+# install.packages("repr")
 library(tidyverse)
 library(lubridate)
 library(config)
@@ -110,7 +111,6 @@ intersection_in <- function(lst1, lst2) {
   lst3 <- lst1[lst1 %in% lst2]
   return(lst3)
 }
-
 ```
 
 
@@ -126,7 +126,7 @@ intersection_in <- function(lst1, lst2) {
 # 
 # Returns:
 #   logical: TRUE if `cell` meets all specified criteria, FALSE otherwise.
-# 
+ 
 generalized_contains <- function(cell, included_and=NULL, included_or=NULL, excluded_and=NULL, excluded_or=NULL) {
   if (!is.character(cell)) {
     return(FALSE)  # Return FALSE if `cell` is not a string
@@ -166,26 +166,26 @@ generalized_contains <- function(cell, included_and=NULL, included_or=NULL, excl
 }
 
 ### Example usage
-cell <- "This board member is a past chairperson."
-included_and <- c('board', 'member')
-included_or <- c('past', 'former')
-excluded_and <- NULL
-excluded_or <- NULL
-generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
-
-cell <- "This board member is a past chairperson."
-included_and <- c('board', 'member')
-included_or <- NULL
-excluded_and <- NULL
-excluded_or <- c('past', 'former')
-generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
-
-cell <- "prospect_manager_2nd"
-included_and <- NULL
-included_or <- c('prospect_manager', 'solicitor')
-excluded_and <- NULL
-excluded_or <- c("2")
-generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
+# cell <- "This board member is a past chairperson."
+# included_and <- c('board', 'member')
+# included_or <- c('past', 'former')
+# excluded_and <- NULL
+# excluded_or <- NULL
+# generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
+# 
+# cell <- "This board member is a past chairperson."
+# included_and <- c('board', 'member')
+# included_or <- NULL
+# excluded_and <- NULL
+# excluded_or <- c('past', 'former')
+# generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
+# 
+# cell <- "prospect_manager_2nd"
+# included_and <- NULL
+# included_or <- c('prospect_manager', 'solicitor')
+# excluded_and <- NULL
+# excluded_or <- c("2")
+# generalized_contains(cell, included_and, included_or, excluded_and, excluded_or)
 ```
 
 ```{r}
@@ -299,93 +299,84 @@ save_file <- function(df, file_prefix = "constituents_cleaned", version = "v1") 
   
   # Define file path components (replace with actual paths as needed)
   file_path <- "/path/to/your/file"  # Replace with actual file path
-  clients <- "your_clients_folder"   # Replace with actual clients folder
-  subdir <- "your_subdirectory"      # Replace with actual subdirectory
+  # clients <- "your_clients_folder"   # Replace with actual clients folder
+  # subdir <- "your_subdirectory"      # Replace with actual subdirectory
   
   # Create directory structure if it doesn't exist
-  dir.create(file.path(file_path, clients, subdir, "Cleaning"), showWarnings = FALSE, recursive = TRUE)
+  dir.create(file.path(file_path, "Cleaning"), showWarnings = FALSE, recursive = TRUE)
   
   # Save data frame to CSV file
-  write.csv(df, file.path(file_path, clients, subdir, "Cleaning", file_name), row.names = FALSE)
+  write.csv(df, file.path(file_path, "Cleaning", file_name), row.names = FALSE)
 }
 ```
 
 # **Gifts Data**
 
 ```{r}
-file_path = "C:\\Users\\Rmittal\\CCS\\Internal - Analytics - Shared Drive\\1. Shared Drive\\Clients"
-subdir = "Raw Client Data\\Section 2" 
-clients = "National Multiple Sclerosis Society"
-file_name = "Section 2  CCS May 2024-2024-05-22-20-12-55.csv"
-file = "%s\\%s\\%s\\%s" %(file_path, clients, subdir, file_name)
-dfg_1 = dplyr::read_csv(file, encoding="ISO-8859-1")
+file_path <- "C:/Users/Rmittal/CCS/Internal - Analytics - Shared Drive/1. Shared Drive/Clients"
+subdir <- "Raw Client Data/Section 2" 
+clients <- "National Multiple Sclerosis Society"
+file_name <- "Section 2  CCS May 2024-2024-05-22-20-12-55.csv"
+file <- file.path(file_path, clients, subdir, file_name)
+dfg_1 <- read.csv(file, encoding="ISO-8859-1")
 
-dfg_1 = dfg_1[dfg_1["Stage"]=="Closed Won"]
-dfg_1["source"] = "Section 2  CCS May 2024-2024-05-22-20-12-55.csv"
-dfg_1["Close Date"] = dplyr::to_lubridate(dfg_1["Close Date"], format="%m/%d/%Y")#, errors = "coerce")
+dfg_1 <- dfg_1[dfg_1$Stage == "Closed Won", ]
+dfg_1$source <- "Section 2  CCS May 2024-2024-05-22-20-12-55.csv"
+dfg_1$Close.Date <- as.Date(dfg_1$Close.Date, format="%m/%d/%Y")
 
-file_name = "Section 2  CCS May 2024 Pt. 2 GAU Ref-2024-05-30-03-00-07.csv"
-file = "%s\\%s\\%s\\%s" %(file_path, clients, subdir, file_name)
-dfg_2 = dplyr::read_csv(file, encoding="ISO-8859-1")
-dfg_2["source"] = "Section 2  CCS May 2024 Pt. 2 GAU Ref-2024-05-30-03-00-07.csv"
-dfg_2 = dfg_2.drop(columns="Campaign")
+file_name <- "Section 2  CCS May 2024 Pt. 2 GAU Ref-2024-05-30-03-00-07.csv"
+file <- file.path(file_path, clients, subdir, file_name)
+dfg_2 <- read.csv(file, encoding="ISO-8859-1")
+dfg_2$source <- "Section 2  CCS May 2024 Pt. 2 GAU Ref-2024-05-30-03-00-07.csv"
+dfg_2 <- dfg_2 %>% select(-Campaign)
 
-rename_columns={"Opportunity: Opportunity ID": "Opportunity ID", \
-               "Opportunity: Opportunity Record Type": "Opportunity Record Type"}
+rename_columns <- c("Opportunity: Opportunity ID" = "Opportunity ID", 
+                    "Opportunity: Opportunity Record Type" = "Opportunity Record Type")
 
 dfg_2.rename(columns=rename_columns, inplace=True)
 
-dfg_2["Close Date"] = dfg_2["Opportunity: Opportunity Name"].str[-10:].values
-#dfg_2["Close Date"].head()
-dfg_2["Close Date"] = dplyr::to_lubridate(dfg_2["Close Date"], errors = "coerce"))
+dfg_2 <- dfg_2 %>% rename(!!!rename_columns)
+
+dfg_2$Close.Date <- substr(dfg_2$Opportunity.Opportunity.Name, nchar(dfg_2$Opportunity.Opportunity.Name) - 9, nchar(dfg_2$Opportunity.Opportunity.Name))
+dfg_2$Close.Date <- as.Date(dfg_2$Close.Date, format="%Y-%m-%d")
 ```
 
 ```{r}
-#dfg_2[dfg_2["Close Date"].isna()]
-dfg_2["Close Date"] = numpy::where((dfg_2["Opportunity ID"]=="006f400000TcYLhAAN") & \
-                               (dfg_2["GAU Allocation: ID"]=="a0b5G00000RlpR6QAJ"), \
-                               lubridate(2021, 10, 1), dfg_2["Close Date"])
-dfg_2["Close Date"] = numpy::where((dfg_2["Opportunity ID"]=="0065G00000XKQIYQA5") & \
-                               (dfg_2["GAU Allocation: ID"]=="a0b5G00000TVtxWQAT"), \
-                               lubridate(2021, 10, 1), dfg_2["Close Date"])
-dfg_2["Close Date"] = numpy::where((dfg_2["Opportunity ID"]=="0065G00000bXpneQAC") & \
-                               (dfg_2["GAU Allocation: ID"]=="a0b5G00000VMeCOQA1"), \
-                               lubridate(2020, 9, 30), dfg_2["Close Date"])
-dfg_2["Close Date"] = numpy::where((dfg_2["Opportunity ID"]=="006f400000TqcZMAAZ") & \
-                               (dfg_2["GAU Allocation: ID"]=="a0bPd000000PsEvIAK"), \
-                               lubridate(2023, 9, 30), dfg_2["Close Date"])
-
-### Run this again! Ensure the entire column is in lubridate format!
-dfg_2["Close Date"] = dplyr::to_lubridate(dfg_2["Close Date"], errors='coerce'))
+dfg_2$Close.Date[dfg_2$Opportunity.ID == "006f400000TcYLhAAN" & dfg_2$GAU.Allocation.ID == "a0b5G00000RlpR6QAJ"] <- as.Date("2021-10-01")
+dfg_2$Close.Date[dfg_2$Opportunity.ID == "0065G00000XKQIYQA5" & dfg_2$GAU.Allocation.ID == "a0b5G00000TVtxWQAT"] <- as.Date("2021-10-01")
+dfg_2$Close.Date[dfg_2$Opportunity.ID == "0065G00000bXpneQAC" & dfg_2$GAU.Allocation.ID == "a0b5G00000VMeCOQA1"] <- as.Date("2020-09-30")
+dfg_2$Close.Date[dfg_2$Opportunity.ID == "006f400000TqcZMAAZ" & dfg_2$GAU.Allocation.ID == "a0bPd000000PsEvIAK"] <- as.Date("2023-09-30")
+dfg_2$Close.Date <- as.Date(dfg_2$Close.Date, format="%Y-%m-%d")
 ```
 
 ## **Concatenate dfg_1 and dfg_2**
 
 ```{r}
-dfg = dplyr::concat([dfg_1, dfg_2], axis=0)
-dfg["Close Date"] = dplyr::to_lubridate(dfg["Close Date"], errors = "coerce")
-dfg["Amount"] = dfg["Amount"].astype(float))
+dfg <- bind_rows(dfg_1, dfg_2)
+dfg$Close.Date <- as.Date(dfg$Close.Date, format="%Y-%m-%d")
+dfg$Amount <- as.numeric(gsub(",", "", dfg$Amount))
 ```
 
 ```{r}
-dfg.rename({"Amount":"gift_amount",\
-           "Opportunity Record Type": "gift_type",\
-           "Close Date": "gift_date",\
-           "Opportunity ID": "gift_id"}, inplace=True))
+dfg <- dfg %>% rename(gift_amount = Amount,
+                      gift_type = Opportunity.Record.Type,
+                      gift_date = Close.Date,
+                      gift_id = Opportunity.ID)
 ```
 
 ```{r}
-save_file(dfg, file_prefix = "gifts_cleaned", version="v1"))
+save_file(dfg, file_prefix = "gifts_cleaned", version="v1")
 ```
 
 ## **Five Year Giving**
 
 ```{r}
-dfg = dfg.rename(columns={"Primary Contact: Contact ID": "constituent_id"})
-dfg_subset = dfg[dfg["Close Date"]> lubridate(2019, 10, 1)]
-# Example: Drop rows with missing values in 'Amount'
-dfg_subset.dropna(subset=["Amount"], inplace=True)
-dfg_fyg = dfg_subset.groupby("Opportunity ID")["Amount"].sum().reset_index().rename(columns={"Amount": "five_year_giving"}))
+dfg <- dfg %>% rename(constituent_id = Primary.Contact.ID)
+dfg_subset <- dfg %>% filter(Close.Date > as.Date("2019-10-01"))
+dfg_subset <- dfg_subset %>% drop_na(Amount)
+dfg_fyg <- dfg_subset %>% group_by(Opportunity.ID) %>% 
+  summarise(five_year_giving = sum(Amount, na.rm = TRUE)) %>% 
+  ungroup()
 ```
 
 # **Combine Files**
