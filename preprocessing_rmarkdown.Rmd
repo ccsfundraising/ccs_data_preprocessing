@@ -25,7 +25,7 @@ options(tibble.width = Inf)
 options(tibble.print_max = 50)
 ```
 
-# **Functions**
+# Functions
 
 ```{r}
 convert_to_snake_case <- function(col_name) {
@@ -310,15 +310,15 @@ save_file <- function(df, file_prefix = "constituents_cleaned", version = "v1") 
 }
 ```
 
-# **Variables**
+# Variables
 
 ```{r}
-file_path = "C:\\Users\\Rmittal\\CCS\\Internal - Analytics - Shared Drive\\1. Shared Drive\\Clients"
+file_path <- "C:\\Users\\Rmittal\\CCS\\Internal - Analytics - Shared Drive\\1. Shared Drive\\Clients"
 clients <- "National Multiple Sclerosis Society"
 ```
 
 
-# **Gifts Data**
+# Gifts Data
 
 ```{r}
 subdir <- "Raw Client Data/Section 2" 
@@ -355,7 +355,7 @@ dfg_2$Close.Date[dfg_2$Opportunity.ID == "006f400000TqcZMAAZ" & dfg_2$GAU.Alloca
 dfg_2$Close.Date <- as.Date(dfg_2$Close.Date, format="%Y-%m-%d")
 ```
 
-## **Concatenate dfg_1 and dfg_2**
+## Concatenate dfg_1 and dfg_2
 
 ```{r}
 dfg <- bind_rows(dfg_1, dfg_2)
@@ -374,7 +374,7 @@ dfg <- dfg %>% rename(gift_amount = Amount,
 save_file(dfg, file_prefix = "gifts_cleaned", version="v1")
 ```
 
-## **Five Year Giving**
+## Five Year Giving
 
 ```{r}
 dfg <- dfg %>% rename(constituent_id = Primary.Contact.ID)
@@ -385,10 +385,10 @@ dfg_fyg <- dfg_subset %>% group_by(Opportunity.ID) %>%
   ungroup()
 ```
 
-# **Combine Files**
+# Combine Files
 
 ```{r}
-subdir = "Raw Client Data\\Section 3" 
+subdir <- "Raw Client Data\\Section 3" 
 shared_drive <- file.path(file_path, clients, subdir)
 file_list <- list.files(shared_drive, pattern = "section", ignore.case = TRUE)
 #file_names = ["Section 3-A.csv"]
@@ -418,14 +418,14 @@ if (run) {
 }
 ```
 
-# **Convert the column names into snake case**
+# Convert the column names into snake case
 
 ```{r}
 # Apply the convert_to_snake_case function to all column names
 df_cd <- df_cd %>% rename_all(~ convert_to_snake_case(.))
 ```
 
-# **Check for overall duplicates**
+# Check for overall duplicates
 
 ```{r}
 run <- FALSE
@@ -437,7 +437,7 @@ if (run) {
 ## 9038462)
 ```
 
-# **Renaming**
+# Renaming
 
 ```{r}
 rename_columns <- c("x18_char_contact_id" = "constituent_id",
@@ -458,15 +458,15 @@ df_cd <- df_cd %>% rename(!!!rename_columns)
 df_cd <- df_cd %>% rename(!!!rename_columns)
 ```
 
-# **Constituent_id**
+# Constituent_id
 
 ```{r}
 n_distinct(df_cd$constituent_id)
 ```
 
-# **Formatting**
+# Formatting
 
-##### **Remove dollar sign and comma**
+##### Remove dollar sign and comma
 
 ```{r}
 amount_columns <- grep("amount", names(df_cd), value = TRUE, ignore.case = TRUE)
@@ -474,35 +474,35 @@ df_cd[amount_columns] <- df_cd[amount_columns] %>%
   mutate_all(~ as.numeric(remove_dollar_sign_and_comma(.)))
 ```
 
-# **key_indicator**
+# key_indicator
 
 ```{r}
 df_cd["key_indicator"].value_counts()
 ```
 
-# **is_individual**
+# is_individual
 
 ```{r}
 df_cd <- df_cd %>% mutate(is_individual = key_indicator == "Household")
 ```
 
-# **is_deceased**
+# is_deceased
 
 ```{r}
 df_cd <- df_cd %>% mutate(is_deceased = npsp_deceased == TRUE | !is.na(deceased_date))
 ```
 
-# **Trustee**
+# Trustee
 
 ```{r}
 df_cd <- df_cd %>% mutate(current_trustee_indicator = board_member_check == 1 | national_board_member == 1)
 ```
 
-# **pg_indicator**
+# pg_indicator
 
 ```{r}
-subdir = "Raw Client Data" 
-file_name = "Contacts with Personas.csv"
+subdir <- "Raw Client Data" 
+file_name <- "Contacts with Personas.csv"
 
 file <- file.path(file_path, clients, subdir, file_name)
 df_pg <- read.csv(file, encoding="ISO-8859-1")
@@ -513,7 +513,7 @@ pg_constit_id <- unique(df_pg_lawry$constituent_id)
 df_cd <- df_cd %>% mutate(pg_indicator = constituent_id %in% pg_constit_id)
 ```
 
-# **head_of_household and household_id**
+# head_of_household and household_id
 
 ```{r}
 get_max_index <- function(group) {
@@ -560,7 +560,7 @@ df_cd <- df_cd %>%
   left_join(df_cdi %>% select(Unique.Donor.ID, head_of_household, household_id), by = "Unique.Donor.ID")
 ```
 
-# **is_assigned**
+# is_assigned
 
 ```{r}
 columns_solicitor_type <- grep("solicitor type", names(df_cd), value = TRUE, ignore.case = TRUE)
@@ -585,7 +585,7 @@ for (i in seq_along(columns_solicitor_type)) {
 df_cd <- df_cd %>% select(-is_assigned_1, -is_assigned_2)
 ```
 
-# **assigned_manager**
+# assigned_manager
 
 ```{r}
 conditions <- list(
@@ -609,7 +609,7 @@ choices <- c(
 df_cd <- df_cd %>% mutate(assigned_manager = dplyr::coalesce(!!!choices))
 ```
 
-# **solicit_codes**
+# solicit_codes
 
 ```{r}
 columns_solicit_codes <- grep("solicit", names(df_cd), value = TRUE, ignore.case = TRUE)
@@ -617,7 +617,7 @@ df_cd <- df_cd %>% mutate(solicit_codes = rowSums(select(., all_of(columns_solic
 df_cd$solicit_codes <- as.integer(df_cd$solicit_codes)
 ```
 
-# **marital_status**
+# marital_status
 
 ```{r}
 columns_spouse <- grep("spouse", names(df_cd), value = TRUE, ignore.case = TRUE)
@@ -625,7 +625,7 @@ df_cd <- df_cd %>% mutate(marital_status = ifelse(rowSums(select(., all_of(colum
 df_cd <- df_cd %>% mutate(marital_status = ifelse(!is.na(df_cd$Spouse.deceased), "widow", df_cd$marital_status))
 ```
 
-# **five_year_giving**
+# five_year_giving
 
 ```{r}
 df_cd <- df_cd %>% mutate(five_year_giving = rowSums(select(., starts_with("2024 Giving Total"),
@@ -636,7 +636,7 @@ df_cd <- df_cd %>% mutate(five_year_giving = rowSums(select(., starts_with("2024
                                                             starts_with("2019 Giving Total")), na.rm = TRUE))
 ```
 
-# **Model Scores**
+# Model Scores
 
 ```{r}
 df_cd <- df_cd %>% mutate(major_donor_model_score = 0,
@@ -644,7 +644,7 @@ df_cd <- df_cd %>% mutate(major_donor_model_score = 0,
                           n_years_giving_of_ten = NA)
 ```
 
-# **planned_gift_commitment**
+# planned_gift_commitment
 
 ```{r}
 columns_planned <- grep("planned", names(df_cd), value = TRUE, ignore.case = TRUE)
@@ -652,187 +652,163 @@ df_cd <- df_cd %>% mutate(planned_gift_commitment = rowSums(select(., all_of(col
 df_cd$planned_gift_commitment <- as.integer(df_cd$planned_gift_commitment)
 ```
 
-# **Staff Indicator**
+# Staff Indicator
 
 ```{r}
-run = False
-if run:
-    save_file(df_cd, file_prefix = "constituents_cleaned_no_staff_indicator", version="v2"))
+run <- FALSE
+if (run) {
+  save_file(df_cd, file_prefix = "constituents_cleaned_no_staff_indicator", version = "v2")
+}
 ```
 
 ```{r}
-# Define path and filename variables
+subdir <- "Raw Client Data" 
+file_name <- "All Staff List - for Sara Groh - 05162024.xlsx"
 
-file_path = "C:\\Users\\Rmittal\\CCS\\Internal - Analytics - Shared Drive\\1. Shared Drive\\Clients"
-subdir = "Raw Client Data" 
-clients = "National Multiple Sclerosis Society"
-file_name = "All Staff List - for Sara Groh - 05162024.xlsx"
-
-file = "%s\\%s\\%s\\%s" %(file_path, clients, subdir, file_name)
-df_staff = dplyr::read_excel(file)
-df_staff.rename(columns={"Email - Primary Home": "npe01_home_email",\
-                        "Email - Work": "npe01_alternate_email"}, inplace=True))
+file <- file.path(file_path, clients, subdir, file_name)
+df_staff <- readxl::read_excel(file)
+df_staff <- df_staff %>% rename(npe01_home_email = `Email - Primary Home`,
+                                npe01_alternate_email = `Email - Work`)
 ```
 
 ```{r}
-#df_staff.head())
+head(df_staff)
 ```
 
 ```{r}
-#df_cd_subset = df_cd.dropna(subset=["npe01_home_email", "npe01_alternate_email"])[0:100000])
+# Merge df_cd with df_staff based on email columns
+df_cd <- df_cd %>%
+  left_join(df_staff %>% select(npe01_home_email, npe01_alternate_email), 
+            by = c("npe01_home_email", "npe01_alternate_email"), 
+            keep = TRUE)
 ```
 
 ```{r}
-#df_cd_subset = df_cd[(~df_cd["npe01_home_email"].isna()) | (~df_cd["npe01_alternate_email"].isna())][0:100000]
-df_cd= df_cd.merge(df_staff[["npe01_home_email", "npe01_alternate_email"]],\
-                                 on=["npe01_home_email", "npe01_alternate_email"], how="left", indicator=True))
+# Create staff_indicator column
+df_cd <- df_cd %>%
+  mutate(staff_indicator = ifelse(`_merge` == "both", 1, 0)) %>%
+  select(-`_merge`)
 ```
 
 ```{r}
-#df_cd_subset[df_cd_subset["_merge"]=="both"][["npe01_home_email", "npe01_alternate_email"]]
-df_cd["staff_indicator"] = numpy::where(df_cd["_merge"]=="both", 1, 0)
-#df_cd.drop(columns="_merge", inplace=True))
+# Check the counts of different merge results
+table(df_cd$staff_indicator)
 ```
 
 ```{r}
-df_cd["_merge"].value_counts())
+# Check the counts of different values in the other_street column
+table(df_cd$other_street)
 ```
 
 ```{r}
-df_cd["other_street"].value_counts())
+run <- FALSE
+if (run) {
+  save_file(df_cd, file_prefix = "constituents_cleaned", version = "v2")
+}
 ```
+
+# Mapper
 
 ```{r}
-run = False
-if run:
-    save_file(df_cd, file_prefix="constituents_cleaned", version="v2"))
+save_file(df_cd, file_prefix = "constituents_before_mapping", version = "v1")
+
+mapping <- read.csv("./constit_mapping_nmss.csv")
+column_mapping <- setNames(mapping$expected_columns, mapping$file_columns)
+df_final <- df_cd %>% rename(!!!column_mapping)
+df_final <- df_final %>% select(all_of(column_mapping))
+save_file(df_final, file_prefix = "constituents_cleaned_mapped", version = "v1")
 ```
 
-# **Mapper**
+# Address
 
 ```{r}
-mapping = dplyr::read_csv("./constit_mapping_nmss.csv")
-column_mapping = {row["file_columns"]: row["expected_columns"] \
-                  for index, row in mapping.iterrows() if row["file_columns"]!="not_found"}
-df_final = df_cd.rename(columns=column_mapping)
-df_final = df_final[list(column_mapping.values())]
-save_file(df_cd, file_prefix="constituents_cleaned_mapped", version="v1"))
+df_cd <- df_cd %>% mutate(business_address = preferred_address_type == "Business",
+                          seasonal_address = grepl("summer|winter|alternate", preferred_address_type, ignore.case = TRUE))
 ```
 
-# **Address**
+# Phone
 
 ```{r}
-df_cd["business_address"] = numpy::where(df_cd["preferred_address_type"]=="Business", True, False)
-df_cd["seasonal_address"] = numpy::where(df_cd["preferred_address_type"]\
-                                    .str.contains("summer|winter|alternate", case=False, na=False), True, False))
+df_cd <- df_cd %>% mutate(home_phone = ifelse(Phone.Type == "Home", Phone.Number, NA),
+                          home_phone = ifelse(is.na(home_phone) & Phone.Type_1 == "Home", Phone.Number_1, home_phone),
+                          cell_phone = ifelse(Phone.Type == "Cell", Phone.Number, NA),
+                          cell_phone = ifelse(is.na(cell_phone) & Phone.Type_1 == "Cell", Phone.Number_1, cell_phone))
 ```
 
-# **Phone**
-
-```{r}
-df_cd["home_phone"] = numpy::where(df_cd["Phone Type"] == "Home", df_cd["Phone Number"], numpy::nan)
-
-# Updating the condition for the second pair of columns
-df_cd["home_phone"] = numpy::where(
-    (df_cd["Phone Type_1"] == "Home") & df_cd["home_phone"].isna(), 
-    df_cd["Phone Number_1"], 
-    df_cd["home_phone"]
-)
-
-df_cd["cell_phone"] = numpy::where(df_cd["Phone Type"] == "Cell", df_cd["Phone Number"], numpy::nan)
-
-# Updating the condition for the second pair of columns
-df_cd["cell_phone"] = numpy::where(
-    (df_cd["Phone Type_1"] == "Cell") & df_cd["cell_phone"].isna(), 
-    df_cd["Phone Number_1"], 
-    df_cd["cell_phone"]
-))
-```
-
-# **Email**
+# Email
 
 ```{r}
 # Define conditions
-conditions = [
-    df_cd["Email"].notna(),
-    df_cd["Email_1"].notna(),
-    df_cd["Email_2"].notna(),
-    df_cd["Email_3"].notna()
-]
+conditions <- list(
+  !is.na(df_cd$Email),
+  !is.na(df_cd$Email_1),
+  !is.na(df_cd$Email_2),
+  !is.na(df_cd$Email_3)
+)
 
 # Define choices corresponding to the conditions
-choices = [
-    df_cd["Email"],
-    df_cd["Email_1"],
-    df_cd["Email_2"],
-    df_cd["Email_3"]
-]
-
-# Use numpy::select to create the 'personal_email' column
-df_cd["personal_email"] = numpy::select(conditions, choices, default=numpy::nan))
-```
-
-# **number_of_events_attended**
-
-```{r}
-df_cd["number_of_special_events_attended"] = df_cd[["Events", "Events_1", "Events_2", "Events_3", \
-                                                  "Events_4", "Events_5"]].notna().sum(axis=1))
-```
-
-# **total_notes**
-
-```{r}
-df_cd["Total_Notes"]
-df_cd["Total_Notes"] = df_cd["Total_Notes"].fillna(0).astype(int)
-df_cd["Total Notes"] = df_cd["Total Notes"].fillna(0).astype(int)
-df_cd["total_notes"] = df_cd["Total_Notes"] + df_cd["Total Notes"] )
-```
-
-# **Mapper**
-
-### Correlation Plots with Total Lifetime Giving
-
-```{r}
-# Drop rows with NaNs in these columns
-df_cleaned = df_cdi_multiple.dropna(subset=["Total Lifetime Giving", "Total Actions"])
-ggplot2::figure(figsize=(8,2))
-ggplot2::scatter(numpy::log(df_cleaned["Total Lifetime Giving"].astype(float)), \
-            df_cleaned["Total Actions"].astype(int))
-ggplot2::xlabel("Total Lifetime Giving")
-ggplot2::ylabel("Total Actions")
-ggplot2::title("Scatter Plot of Total Lifetime Giving vs. Total Actions")
-ggplot2::show()
-
-df_cleaned = df_cdi_multiple.dropna(subset=["Total Lifetime Giving", "Pledged Planned Gift"])
-ggplot2::figure(figsize=(8,2))
-ggplot2::scatter(numpy::log(df_cleaned["Total Lifetime Giving"].astype(float)), \
-            df_cleaned["Pledged Planned Gift"].astype(float))
-ggplot2::xlabel("Total Lifetime Giving")
-ggplot2::ylabel("Pledged Planned Gift")
-ggplot2::title("Scatter Plot of Total Lifetime Giving vs. Pledged Planned Gift")
-ggplot2::show())
-```
-
-# **Preprocessing after mapping**
-
-```{r}
-df["class_year"] = df["class_year"].str.split("'",expand=True)[1]
-df["class_year"] = df["class_year"].fillna(numpy::nan).astype('Int64'))
-```
-
-```{r}
-mask = ~df["class_year"].isna()
-df.loc[mask, "class_year"] = numpy::where((df.loc[mask, "class_year"] > 25),
-                                      "19" + df.loc[mask, "class_year"].astype(str),
-                                      "20" + df.loc[mask, "class_year"].astype(str)))
-```
-
-```{r}
-cols_lubridate = list(df.select_dtypes(include=['lubridate']).columns)
-for col in cols_lubridate:
-    df[col] = dplyr::to_lubridate(df[col]).dt.date)
-```
-
-```{r}
+choices <- c(
+  df_cd$Email,
+  df_cd$Email_1,
+  df_cd$Email_2,
+  df_cd$Email_3
 )
+
+# Create the 'personal_email' column
+df_cd <- df_cd %>% mutate(personal_email = coalesce(!!!choices))
+```
+
+# number_of_events_attended
+
+```{r}
+df_cd <- df_cd %>% mutate(number_of_special_events_attended = rowSums(select(., starts_with("Events")), na.rm = TRUE))
+```
+
+# total_notes
+
+```{r}
+df_cd <- df_cd %>% mutate(Total_Notes = replace_na(Total_Notes, 0),
+                          `Total Notes` = replace_na(`Total Notes`, 0),
+                          total_notes = Total_Notes + `Total Notes`)
+```
+
+# Mapper
+
+## Correlation Plots with Total Lifetime Giving
+
+```{r}
+library(ggplot2)
+
+# Drop rows with NaNs in these columns
+df_cleaned <- df_cdi_multiple %>% drop_na(`Total Lifetime Giving`, `Total Actions`)
+
+ggplot(df_cleaned, aes(x = log(`Total Lifetime Giving`), y = `Total Actions`)) +
+  geom_point() +
+  labs(title = "Scatter Plot of Total Lifetime Giving vs. Total Actions",
+       x = "Total Lifetime Giving (log scale)",
+       y = "Total Actions") +
+  theme_minimal()
+
+df_cleaned <- df_cdi_multiple %>% drop_na(`Total Lifetime Giving`, `Pledged Planned Gift`)
+
+ggplot(df_cleaned, aes(x = log(`Total Lifetime Giving`), y = `Pledged Planned Gift`)) +
+  geom_point() +
+  labs(title = "Scatter Plot of Total Lifetime Giving vs. Pledged Planned Gift",
+       x = "Total Lifetime Giving (log scale)",
+       y = "Pledged Planned Gift") +
+  theme_minimal()
+```
+
+# Preprocessing after mapping
+
+```{r}
+df_cd <- df_cd %>% mutate(class_year = str_extract(class_year, "\\d{2}"),
+                          class_year = ifelse(as.numeric(class_year) > 25, paste0("19", class_year), paste0("20", class_year)),
+                          class_year = as.integer(class_year))
+
+df_cd <- df_cd %>% mutate_at(vars(ends_with("Date")), as.Date)
+```
+
+```{r}
+save_file(df_cd, file_prefix = "constituents_cleaned_final", version = "v1")
 ```
