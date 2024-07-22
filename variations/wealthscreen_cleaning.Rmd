@@ -1,0 +1,1169 @@
+---
+title: "Wealth Screening"
+author: "CCS Fundraising Analytics"
+date: "`r Sys.Date()`"
+output:
+   html_document: default
+---
+
+## Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+switch(Sys.info()[['sysname']],
+Windows = {ifelse(test = file.exists(sprintf('/Users/%s/CCS/Internal - Analytics - Shared Drive', Sys.info()[["user"]])), 
+                  yes = onedrive_dir <- sprintf('/Users/%s/CCS/Internal - Analytics - Shared Drive', Sys.info()[["user"]]), 
+                  no = print("Do you have onedrive desktop?"))},
+Darwin = {ifelse(test = file.exists(sprintf('/Users/%s/Library/CloudStorage/OneDrive-SharedLibraries-CCS/Internal - Analytics - Shared Drive', Sys.info()[["user"]])), 
+                 yes = onedrive_dir <- sprintf('/Users/%s/Library/CloudStorage/OneDrive-SharedLibraries-CCS/Internal - Analytics - Shared Drive', Sys.info()[["user"]]), 
+                 no = print("Do you have onedrive desktop?"))},
+Linux  = {print("I'm a penguin. Nick has not figured out what OneDrive pathing is on linux operating systems, sorry!")}
+)
+
+#some universal arguments to set in the script for running below:
+#gift file directory
+proj_dir <- "CLIENT NAME"
+
+#gift file extension, will accept: txt, csv, xlsx, or xls
+file_format <- "csv"
+
+#first and last FY
+fy_ends <- c(first = 2013, last = 2022)
+
+#FY start month as an integer (e.g., January = 1, October = 10, etc.)
+fy_month <- 7
+
+#date format (year = y, month = m, day = d) as the letters used (E.g., "mdy" for 10-31-2022)
+date_form <- "ymd"
+
+#something for above and below the lines
+#is the client an accrual or cash client for the purpose of data validation?
+#client_type <- "cash"
+client_type <- "accrual"
+```
+
+## Load packages
+
+```{r read in libraries, message=FALSE}
+library(tidyverse) #data reading, wrangling, manipulation, etc.
+library(readxl) #reading in excel files
+library(vroom) #read in CSVs quickly
+library(data.table) #alternative for quick reading of big files
+library(janitor) #easier cleaning of column names when read in
+library(lubridate) #working with and cleaning dates
+library(magrittr) #extra piping tools
+library(scales) #ggplot aesthetics
+library(knitr) #table output
+library(kableExtra) #table aesthetics
+library(purrr) #mapping across reading excel files
+library(tidymodels) #modeling metapackage
+library(caret) #modeling cleanly
+library(doParallel) #parallelizing some modeling
+library(leaps) #stepwise regression
+library(ccsfun) #ccs functions package
+library(openxlsx) #write out xlsx files
+```
+
+# WE screening prep
+
+## Bring the final models and join
+
+```{r bring in model scores}
+#read models file in
+constit_modeling_final <- read_csv(file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_mg_loyal.csv")))
+
+#load data if needed
+load(file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_constit_modeling.Rda")))
+```
+
+```{r read in clean constit file, warning=FALSE}
+constit_clean <- vroom(file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Data Validation Work", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_constit_clean.csv")), 
+                      col_types = cols(
+                                       .default = col_character()
+                                      ), 
+                      guess_max = 1e6
+                      )
+
+#dim check
+dim(constit_clean)
+```
+
+## 0. Ensure that WE necessary fields are present
+User Supplied ID
+User Supplied ID 2
+Prefix	
+First Name	
+Middle Name	
+Last Name	
+Suffix	
+Primary Address Line 1	
+Primary Address Line 2	
+Primary Address City	
+Primary Address State	
+Primary Address Zip
+Date of Birth [OR]	Age
+
+```{r ensure proper WE fields}
+#join in missing fields from original file
+constit_modeling_we <- constit_modeling_final %>%
+  select(unique_donor_id, 
+         m_giving_logp1, 
+         mg_predict:mg_predict_ranks100,
+         loyal_prop,
+         loyal_predict:loyal_predict_ranks100) %>% 
+  left_join(., (constit_clean %>% select(
+    unique_donor_id, 
+    keyindicator, 
+    prefix, 
+    firstname, 
+    middlename, 
+    lastname, 
+    suffix,
+    addressline,
+    city,
+    state,
+    zip,
+    zip_clean,
+    country,
+    complete_address,
+    age,
+    householdlookupid, 
+    spouselookupid, 
+    #spouse_name,
+    pledgebasistotalgiving, 
+    #board_member_binary, 
+    prospect_manager_synth
+  )))
+
+## Connect MSA data to constit_clean object
+#bring in the data we have 
+data(msa, package = "ccsfun")
+
+#join the two for easy join to the full dataset
+# note that msa data has more zip codes covered, so it is the origin of the join
+constit_modeling_we <- left_join(constit_modeling_we, msa %>% select(-msa_num, -state), by = c("zip_clean" = "zip_code"))
+  
+
+#dim check
+dim(constit_clean)
+```
+
+# Identify board members and join indicator?
+
+## 1. Remove non-US addresses, missing ID, or incomplete address
+```{r rm non-us}
+#bring in the revenue streams
+constit_modeling_we %<>%
+  #rm those without USA address or chapter/account info
+    filter(!is.na(constituentlookupid)) %>%
+  #rm those without complete addresses
+    filter(complete_address == TRUE) %>%
+  #filter for just US addresses
+    filter(country == "USA")
+
+#rm(constit_clean)
+dim(constit_modeling_we)
+```
+
+
+```{r}
+#num assigned (10355)
+constit_clean %>%
+  filter(!is.na(prospect_manager_synth)) %>%
+  dim()
+
+#num that are orgs (10355 - 1718 = 8637 still eligible)
+constit_clean %>%
+  filter(!is.na(prospect_manager_synth)) %>%
+  filter(keyindicator == "Organization") %>%
+  dim()
+
+#num that are individuals but deceased (8637 - 478 = 8159)
+constit_clean %>%
+  filter(!is.na(prospect_manager_synth)) %>%
+  filter(keyindicator == "Individual") %>%
+  filter(deceased == "1") %>% 
+  dim()
+
+#num that are individuals but have no address (8159 - 218 = 7941)
+constit_clean %>%
+  filter(!is.na(prospect_manager_synth)) %>%
+  filter(keyindicator == "Individual") %>%
+  filter(deceased == "0") %>%
+  filter(complete_address == FALSE) %>%
+  dim()
+
+#num that are individuals with an address but live outside the US (7941 - 0 = 7941)
+constit_clean %>%
+  filter(!is.na(prospect_manager_synth)) %>%
+  filter(keyindicator == "Individual") %>%
+  filter(deceased == "0") %>%
+  filter(complete_address == TRUE) %>%
+  filter(country != "USA") %>%
+  dim()
+
+#num that are individuals with everything else but have not given (7941 - 893 = 7048)
+constit_clean %>%
+  filter(!is.na(prospect_manager_synth)) %>%
+  filter(keyindicator == "Individual") %>%
+  filter(deceased == "0") %>%
+  filter(complete_address == TRUE) %>%
+  filter(country == "USA") %>%
+  filter(pledgebasistotalgiving <= 0) %>%
+  dim()
+
+#num modeled and screened (7732)
+constit_modeling_we %>%
+  filter(!is.na(prospect_manager_synth)) %>%
+  dim()
+
+
+#isolate the num missing from the 7732 modeled
+extras <- setdiff(
+  constit_clean %>% 
+    filter(!is.na(prospect_manager_synth)) %>%
+    filter(keyindicator == "Individual") %>%
+    filter(deceased == "0") %>%
+    filter(complete_address == TRUE) %>%
+    filter(country == "USA") %>%
+    filter(pledgebasistotalgiving <= 0) %>%
+    pull(constituentlookupid),
+  constit_modeling_we %>%
+    filter(!is.na(prospect_manager_synth)) %>%
+    pull(constituentlookupid)
+  )
+
+#filter to figure out what the missing folks are: they are assigned but with no giving whatsoever. Let's keep them for screening though (after de-duping)
+filter(.data = constit_clean, constituentlookupid %in% extras) %>%
+    select(constituentlookupid, ends_with("giving"), ends_with("givingamount"), prospect_manager_synth)
+
+
+#There are none missing if we account for these filters
+#but we want to keep the assigned folks with no giving for screening (after they have been de-duped)
+
+#so we find a way to add them in
+constit_modeling_we <- constit_modeling_we %>%
+  bind_rows(., constit_clean %>%
+  filter(constituentlookupid %in% extras) %>%
+  select(constituentlookupid, keyindicator, prefix, firstname, middlename, lastname, suffix, addressline, city, state, zip, zip_clean, country, complete_address, age, householdlookupid, spouselookupid, pledgebasistotalgiving, prospect_manager_synth)) %>%
+  #add in zeros for board members field
+  mutate(board_member_binary = case_when(
+    constituentlookupid %in% board_ids ~ 1L,
+    TRUE ~ 0L
+  ))
+  
+```
+
+# Workflow
+
+  1. bring in modeling files and join to cleaned constituent file, select the required fields
+  2. filter for rows with a donor id, complete addresses (checked during constituent file validation for address, city, state, zip), and finally for country == US
+  3. check all name fields (prefix, first, middle, last, suffix) for Inc, Fund, Trust, LLC, The, and remove. 
+  4. look for empty or NA last name fields and try to use the last word in the first name to populate it
+  5. For name clean up
+    - Example: Jessica L. is in the first name field. Move the middle initial to the middle name column... In Excel, we can use the LEN formula to determine if the second name in the first name field has 2 characters or less.
+    - Example: L. Jessica is in the first name field. Keep the first initial and then move middle to the middle name column... In Excel, we can use the LEN formula to determine if the first name has 2 characters or less.
+    - Example: Roberts III is in the last name field. Move the suffix to the suffix field… In Excel, we can use the LEN formula to determine if the last name has 3-4 characters or less.
+  6. clean addresses
+    - for looking for duplicates. Last Name + Address for looking for duplicates
+    - remove extra spaces, punctuation, #, etc.replace road names with abbreviations
+  7. seek duplicates (i am currently working on this section, hence the requested clarification)
+  8. get top percent of model scores for subset to screen
+  9. rename/reorder fields for export and screening
+
+Remove "Inc" "Incorporated" "LLC" name rows
+
+```{r rm inc and llc}
+constit_modeling_we %<>%
+  filter(!if_any(.cols = c(prefix, firstname, middlename, lastname, suffix), .fns = ~grepl(pattern = " incorporated| inc| llc", x = .x, ignore.case = TRUE)))
+
+dim(constit_modeling_we)
+```
+
+## 2. Remove anything “Inc” or “Family” “fund” “trust” “LLC” “the ” stray commas/spaces from names/titles – take out un-needed titles (e.g. ‘CPA’ ‘MBA’) – check constituent fields here, or missing last names, missing first names, etc. 
+```{r}
+constit_modeling_we %<>%
+  #rm family or families
+    mutate(across(.cols = c(prefix, firstname, middlename, lastname, suffix), .fns = ~gsub(x = .x, replacement = "", pattern = "family|families", ignore.case = TRUE))) %>%
+  #rm fund
+    mutate(across(.cols = c(prefix, firstname, middlename, lastname, suffix), .fns = ~gsub(x = .x, replacement = "", pattern = " fund(\\b| |\\.)", ignore.case = TRUE))) %>%
+  #rm trust
+    mutate(across(.cols = c(prefix, firstname, middlename, lastname, suffix), .fns = ~gsub(x = .x, replacement = "", pattern = " trust(\\b| |\\.)", ignore.case = TRUE))) %>%
+  #rm the (space)
+    mutate(across(.cols = c(prefix, firstname, middlename, lastname, suffix), .fns = ~gsub(x = .x, replacement = "", pattern = " the(\\b| |\\.)", ignore.case = TRUE))) 
+
+dim(constit_modeling_we)
+
+
+#now try to split up the NA name fields so that we can plug them in from the account_name
+last_name_fixed <- constit_modeling_we %>%
+  #filter empty string last names or NA or . for last name
+  filter((lastname == "" | lastname == "." | is.na(lastname) | is.null(lastname))) %>%
+  #remove the suffixes
+  mutate(firstname = str_remove(string = firstname, pattern = paste(unique(constit_modeling_we$suffix)[!is.na(unique(constit_modeling_we$suffix))], "$", collapse = "|", sep = ""))) %>%
+  mutate(lastname = word(start = -1, string = firstname)) %>%
+  #change the empty strings to NA for lastname
+  mutate(lastname = na_if(x = lastname, y = "")) %>%
+  #remove the last name from the account name to get the first name
+  mutate(firstname = str_remove(string = firstname, pattern = lastname)) %>%
+  mutate(firstname = str_remove(string = firstname, pattern = "[[:space:]]$")) %>%
+  #get rid of comas and text at the end
+  mutate(lastname = str_remove(string = lastname, pattern = ",\\S+$|,$")) %>%
+  #fix last names that are now "the" or "and" by giving the middlename
+  mutate(lastname = case_when(
+    grepl(x = lastname, pattern = "^the$|^and$", ignore.case = TRUE) & (!is.na(middlename) | middlename != "") ~ middlename,
+    TRUE ~ lastname
+  )) %>%
+  #turn the middlename of matching middle and lastnames to NA
+  mutate(middlename = case_when(
+    middlename == lastname ~ NA_character_,
+    TRUE ~ middlename
+  ))
+
+constit_modeling_we %<>%
+  #filter empty string last names or NA or . for last name
+  filter(!(lastname == "" | lastname == "." | is.na(lastname) | is.null(lastname))) %>%
+  #add the rows back in that have corrections
+  bind_rows(., lastname_fixed) %>%
+  #redo the empty string filter to be safe with NA lastnames
+  filter(!(lastname == "" | lastname == "." | is.na(lastname) | is.null(lastname)))
+
+#clean up the hyphenated last name
+constit_modeling_we %<>%
+  #remove errant whitespace in hyphenated names
+  mutate(lastname = str_replace_all(pattern = "[[:space:]]*-[[:space:]]*", replacement = "_", string = lastname)) %>%
+  #remove underscores in hyphenated names
+  mutate(lastname = str_replace_all(pattern = "_", replacement = "-", string = lastname)) %>%
+  #remove parentheses
+  mutate(lastname = str_remove_all(pattern = "\\(|\\)", string = lastname)) %>%
+  #remove periods at the end
+  mutate(lastname = str_remove_all(pattern = "\\.$", string = lastname)) %>%
+  #remove spaces at end
+  mutate(lastname = str_remove(pattern = "[[:space:]]+$", string = lastname))
+
+#check for multiple words in last name
+#constit_modeling_we %>% 
+#  filter(lengths(str_split(firstname, pattern = " ")) > 1) %>% 
+#  pull(firstname) %>% 
+#  unique() %>% 
+#  sort()
+
+first_middlename_fixed <- constit_modeling_we %>%
+  #filter for those that have more than 1 word in first name
+  filter(lengths(str_split(firstname, pattern = " ")) > 1) %>%
+  #remove those with any prefixes as the first word
+  mutate(firstname = str_remove(string = firstname, pattern = paste("^", c(unique(constit_modeling_we$prefix)[!is.na(unique(constit_modeling_we$prefix))], "Rev."), collapse = "|", sep = ""))) %>%
+  #remove extra leading and trailing spaces
+  mutate(firstname = str_remove(pattern = "[[:space:]]+$|^[[:space:]]+", string = firstname)) %>%
+  #get an updated word count to figure out what needs splitting
+  mutate(firstname_wordcount = lengths(str_split(firstname, pattern = " "))) %>%
+  #populate a new first name field
+  mutate(firstname_clean = case_when(
+    (lengths(str_split(firstname, pattern = " ")) > 1) & is.na(middlename) ~ word(start = 1, string = firstname),
+    TRUE ~ firstname
+  )) %>%
+  #populate a new middle name field
+  mutate(middlename_clean = case_when(
+    (lengths(str_split(firstname, pattern = " ")) > 1) & is.na(middlename) ~ word(start = -1, string = firstname),
+    TRUE ~ middlename
+  )) %>%
+  #pass the new fields to the original fields
+  mutate(firstname = firstname_clean,
+         middlename = middlename_clean) %>%
+  #rm the now unnecessary new fields
+  select(-firstname_clean, -middlename_clean, -firstname_wordcount)
+
+
+#remove the rows that match the newly fixed names and bind the new rows
+constit_modeling_we %<>%
+    #filter for those that have more than 1 word in first name
+  filter(!(lengths(str_split(firstname, pattern = " ")) > 1)) %>%
+  #bind the rows now
+  bind_rows(., first_middlename_fixed)
+
+#dim check
+dim(constit_modeling_we)
+
+#check for suffix in last names
+grep(pattern = paste(" ", unique(constit_modeling_we$suffix)[!is.na(unique(constit_modeling_we$suffix))] %>% grep(pattern = "^$", invert = TRUE, value = TRUE), "$", collapse = "|", sep = ""), x = unique(constit_modeling_we$lastname), value = TRUE, ignore.case = TRUE)
+
+#regex for roman numerals and jr. sr.
+grep(pattern = "\\s[IVX]+$|\\sjr\\.$|\\ssr\\.$", x = unique(constit_modeling_we$lastname), value = TRUE, ignore.case = TRUE)
+
+#change the lastnames that end with roman numerals
+lastname_suffix_fixed <- constit_modeling_we %>%
+  #filter for those that have more than 1 word in first name
+  filter(grepl(pattern = "\\s[IVX]+$", x = lastname, ignore.case = TRUE)) %>%
+  #populate a new last name field
+  mutate(lastname_clean = word(start = 1, string = lastname, end = -2)) %>%
+  #populate a new suffix field
+  mutate(suffix_clean = str_to_upper(word(start = -1, string = lastname))) %>%
+  #pass the new fields to the original fields
+  mutate(lastname = lastname_clean,
+         suffix = suffix_clean) %>%
+  #rm the now unnecessary new fields
+  select(-lastname_clean, -suffix_clean)
+
+
+#remove the rows that match the newly fixed names and bind the new rows
+constit_modeling_we %<>%
+    #filter for those that have more than 1 word in first name
+  filter(!grepl(pattern = "\\s[IVX]+$", x = lastname, ignore.case = TRUE)) %>%
+  #bind the rows now
+  bind_rows(., lastname_suffix_fixed)
+
+#do the same for jr. and sr.
+lastname_suffix_fixed <- constit_modeling_we %>%
+  #filter for those that have more than 1 word in first name
+  filter(grepl(pattern = "\\sjr\\.$|\\ssr\\.$", x = lastname, ignore.case = TRUE)) %>%
+  #populate a new last name field
+  mutate(lastname_clean = word(start = 1, string = lastname, end = -2)) %>%
+  #populate a new suffix field
+  mutate(suffix_clean = str_to_title(word(start = -1, string = lastname))) %>%
+  #pass the new fields to the original fields
+  mutate(lastname = lastname_clean,
+         suffix = suffix_clean) %>%
+  #rm the now unnecessary new fields
+  select(-lastname_clean, -suffix_clean) %>%
+  #rm the comma at th end of last name
+  mutate(lastname = str_remove(string = lastname, pattern = ",$"))
+
+constit_modeling_we %<>%
+    #filter for those that have more than 1 word in first name
+  filter(!grepl(pattern = "\\sjr\\.$|\\ssr\\.$", x = lastname, ignore.case = TRUE)) %>%
+  #bind the rows now
+  bind_rows(., lastname_suffix_fixed)
+
+#remove any leading spaces in the name fields
+constit_modeling_we %<>%
+  mutate(across(.cols = prefix:suffix, .fns = ~str_remove(string = .x, pattern = "^ ")))
+```
+
+##3. create a field: last name+street address. This is done with concatenate formula. For this field you created, 
+  - remove spaces, periods, commas, #, -, ‘ 
+  - Change drive to dr 
+  - Change street to st 
+  - Road to rd 
+  - Lane to Ln 
+  - Apartment to Apt
+  - Boulevard to Blvd
+  - Avenue to Ave 
+  - Floor to FL 
+  - Circle to Cir 
+  - Court to Ct 
+  - Place to Pl 
+  - Island to Il
+  
+  Plus directions (N,S,E,W,NW,etc.)
+  
+```{r}
+constit_modeling_we %<>%
+  #get rid of double spaces
+  mutate(addressline = str_remove_all(pattern = "  ", string = addressline)) %>% 
+  #get rid of punctuation
+  mutate(addressline = str_remove_all(pattern = "\\,|\\.|\\'|\\-|\\#|\\_|\\(|\\)", string = addressline)) %>%
+  #change floor to abbrev w/o punctuation
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " floor( |$)", ignore_case = TRUE), replacement = " FL")) %>%
+  #change ending word drive, street, road, lane, apartment, avenue, circle, court, or place to abreviations without punctuation
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " drive$", ignore_case = TRUE), replacement = " Dr")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " street$", ignore_case = TRUE), replacement = " St")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " road$", ignore_case = TRUE), replacement = " Rd")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " lane$", ignore_case = TRUE), replacement = " Ln")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " apartment$", ignore_case = TRUE), replacement = " Apt")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " boulevard$", ignore_case = TRUE), replacement = " Blvd")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " avenue$", ignore_case = TRUE), replacement = " Ave")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " circle$", ignore_case = TRUE), replacement = " Cir")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " court$", ignore_case = TRUE), replacement = " Ct")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " place$", ignore_case = TRUE), replacement = " Pl")) %>%
+   mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " island$", ignore_case = TRUE), replacement = " Il")) %>%
+  #change the cardinal and intermediate directions
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " north ", ignore_case = TRUE), replacement = " N ")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " south ", ignore_case = TRUE), replacement = " S ")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " east ", ignore_case = TRUE), replacement = " E ")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " west ", ignore_case = TRUE), replacement = " W ")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " northeast ", ignore_case = TRUE), replacement = " NE ")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " northwest ", ignore_case = TRUE), replacement = " NW ")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " southeast ", ignore_case = TRUE), replacement = " SE ")) %>%
+  mutate(addressline = str_replace_all(string = addressline, pattern = regex(pattern = " southwest ", ignore_case = TRUE), replacement = " SW ")) %>%
+  #make sure the last name and street_1 is title case
+  #get the new field
+  mutate(name_address = paste(str_to_lower(last_name), str_to_lower(addressline))) %>%
+  mutate(name_address = str_remove_all(string = name_address, pattern = " "))
+
+#dim check
+dim(constit_modeling_we)
+```
+
+
+Get the duplicates and filter them out!
+
+Jessica Roberts:
+I dedup by the following if a general client (if it is higher ed I factor in const. type). Keep those that are assigned, have the highest model score, or have the highest lifetime giving. Does that make sense?
+
+```{r figure out dups with account id}
+#do account IDs first
+if(nrow(dup_ids(x = constit_modeling_we, id_field = "unique_donor_id")) > 0){
+dups_out_sf <- constit_modeling_we %>% 
+  dup_ids(id_field = "unique_donor_id")
+}
+
+#Check if they exist before moving on?
+
+#dups_keep_sf <- dups_out_sf %>%
+#  group_by(account_id) %>%
+#  slice_max(order_by = mg_predict100, n = 1, with_ties = FALSE) %>%
+#  ungroup()
+#
+#dups_out_sf %<>%
+#  filter((!constituent_id %in% dups_keep_sf$constituent_id) & (!contact_id %in% dups_keep_sf$contact_id))
+#
+##filter out the duplicates that perform worse
+#constit_modeling_we %<>%
+#  filter(!constituent_id %in% dups_out_sf$constituent_id)
+```
+
+# Dedupe on spouse ID
+
+```{r}
+#get all spouse ID values
+spouse_ids <- constit_modeling_we %>%
+  filter(!is.na(spouse_constituent_id)) %>%
+  pull(spouse_constituent_id) %>%
+  unique() 
+
+#get the records with either these values for spouse ID or primary ID
+spouse_pairs <- constit_modeling_we %>%
+  filter(constituent_id %in% spouse_ids | spouse_constituent_id %in% spouse_ids) %>%
+  mutate(group_id = NA)
+
+#iteratively build a group ID
+for(a in seq_along(spouse_ids)){
+  spouse_pairs %<>%
+    mutate(group_id = case_when(
+      (constituent_id %in% spouse_ids[a] | spouse_constituent_id %in% spouse_ids[a]) & is.na(group_id) ~ spouse_ids[a],
+      TRUE ~ group_id
+    ))
+}
+
+#obtain the best model scores for the group IDs
+spouse_keep <- spouse_pairs %>%
+  group_by(group_id) %>%
+  slice_max(order_by = c(loyal_predict), n = 1) %>%
+  slice_max(order_by = c(mg_predict), n = 1) %>%
+  ungroup() %>%
+  pull(constituent_id)
+
+#create a list of the IDs to remove
+spouse_rm <- spouse_pairs %>%
+  filter(!constituent_id %in% spouse_keep) %>%
+  pull(constituent_id)
+
+#remove the IDs
+constit_modeling_we %<>%
+  filter(!constituent_id %in% spouse_rm)
+
+```
+
+```{r figure out remaining dups with name_address}
+#then remaining based on name_address
+dups_out_name <- constit_modeling_we %>%
+  dup_ids(id_field = "name_address") %>%
+  arrange(name_address, assigned_manager_final, mg_predict100, total_lifetime_giving) %>% 
+  select(unique_donor_id, spouse_record_id, name_address, prefix:suffix, mg_predict100, loyal_predict100, assigned_manager_final, total_lifetime_giving)
+
+dups_keep_name <- dups_out_name %>%
+  group_by(name_address) %>%
+  #build out a logic to follow
+  #1. are any/all grouped assigned?
+  summarize(n_dups = n(), non_na_assigned = sum(!is.na(assigned_manager_final))) %>%
+  left_join(dups_out_name, .) %>%
+  group_by(name_address) %>%
+  mutate(keep = case_when(
+    #a. if all, then use top model score (Loyal?) and highest giving
+       n_dups == non_na_assigned & (loyal_predict == max(loyal_predict, na.rm = TRUE)) & (total_lifetime_giving == max(total_lifetime_giving, na.rm = TRUE)) ~ 1,
+    #b. if any, filter the unassigned and take the top score of what is left
+     n_dups > non_na_assigned & non_na_assigned > 0 & !is.na(assigned_manager_final) ~ 1,
+    #c. if all are assigned but no model scores (assigned non-donors), take the first ID
+    non_na_assigned > 0 & !is.na(assigned_manager_final) & is.na(loyal_predict) & (unique_donor_id == min(unique_donor_id, na.rm = TRUE)) ~ 1,
+  #2. unassigned: take top model score and giving
+     non_na_assigned == 0 & (loyal_predict == max(loyal_predict, na.rm = TRUE)) ~ 1,
+    TRUE ~ 0
+  )) %>%
+  ungroup() %>%
+  filter(keep == 1)
+
+ 
+
+
+#filter for minimum ID (deals with ties in the final subset)
+dups_keep_name %<>%
+  group_by(name_address) %>%
+  slice_min(unique_donor_id, with_ties = FALSE)
+
+dups_out_name %<>%
+  filter((!unique_donor_id %in% dups_keep_name$unique_donor_id))
+
+#write out the duplicates for client
+if(FALSE){
+constit_modeling_we %>%
+    filter(unique_donor_id %in% dups_out_name$unique_donor_id) %>%
+  select(-mg_predict:-m_giving_logp1, -complete_address,-name_address) %>%
+  write_csv(x = ., file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_donor_duplicates_from_modeling.csv")))
+}
+
+#filter out the duplicates that perform worse
+constit_modeling_we %<>%
+  filter(!unique_donor_id %in% dups_out_name$unique_donor_id)
+```
+
+# Build query file
+
+## Filter for cohort of interest
+
+```{r get top percent model scores and clean for WE}
+#use combined scores check to get top for any of them
+we_final <- constit_modeling_we %>%
+  filter(mg_predict_ranks100 > 86 | loyal_predict_ranks100 > 86)
+
+if(FALSE){
+#get the top % of MG
+mg_top <- constit_modeling_we %>%
+  #merge the models into a temp hybrid field for evaluation
+  mutate(mg_predict100 = case_when(
+    !is.na(mg_predict_patient100) ~ mg_predict_patient100,
+    !is.na(mg_predict_nonpatient100) ~ mg_predict_nonpatient100,
+    TRUE ~ as.numeric(NA)
+  )) %>%
+  slice_max(order_by = mg_predict100, prop = 0.25, with_ties = FALSE) %>%
+  #slice_max(order_by = mg_ranks100, prop = 0.10, with_ties = TRUE) %>%
+  pull(unique_donor_id)
+
+#get the top % of loyal
+loyal_top <- constit_modeling_we %>% 
+  #merge the models into a temp hybrid field for evaluation
+  mutate(loyal_predict100 = case_when(
+    !is.na(loyal_predict_patient100) ~ loyal_predict_patient100,
+    !is.na(loyal_predict_nonpatient100) ~ loyal_predict_nonpatient100,
+    TRUE ~ as.numeric(NA)
+  )) %>%
+  slice_max(order_by = loyal_predict100, prop = 0.25, with_ties = FALSE) %>%
+  #slice_max(order_by = loyal_ranks1000, prop = 0.10, with_ties = TRUE) %>%
+  pull(unique_donor_id)
+
+#check for number intersecting
+intersect(mg_top, loyal_top) %>% length()
+
+#filter for the intersecting IDs
+we_final <- constit_modeling_we %>% 
+  filter(unique_donor_id %in% intersect(mg_top, loyal_top))
+}
+
+#add the assigned nondonors in now
+we_final %<>%
+  bind_rows(., constit_modeling_we %>% filter(is.na(m_giving_logp1)))
+
+```
+
+## Build Highest Model Score Field
+
+```{r}
+we_final %<>%
+  #get best model score and create new field
+  rowwise() %>%
+  mutate(`Highest Model Score` = max(mg_predict_ranks100, loyal_predict_ranks100, na.rm = TRUE)) %>%
+  ungroup() %>%
+  #mutate the unmodeled non-giving assigned constituents
+  mutate(`Highest Model Score` = case_when(
+    is.infinite(`Highest Model Score`) ~ NA_real_,
+    TRUE ~ `Highest Model Score`
+  ))
+```
+
+## Build loyalty from last 10 years field
+
+```{r get loyal 10 years}
+  #calculate out last 10 years number of giving
+loyal_years <- we_final %>%
+  #select just the fields we need for getting these values
+  select(unique_donor_id, matches(match = paste((fy_ends[[2]]-9):(fy_ends[[2]] - -1), collapse = "|"))) %>%
+  #pivot long for the FY giving
+  pivot_longer(cols = matches(match = paste((fy_ends[[2]]-9):(fy_ends[[2]] - -1), collapse = "|")), names_to = "fy") %>%
+  #replace the fy extra text
+  mutate(fy = str_remove_all(pattern = "total_donations_fy_", string = fy)) %>%
+  #make numeric
+  mutate(fy = as.numeric(fy)) %>%
+  #filter for the set of last ten years based on max FY value - 10
+  filter(fy <= max(fy) & fy > (max(fy) - 10)) %>%
+  #filter for value > 0
+  filter(value > 0) %>%
+  #group by uniquedonorid
+  group_by(unique_donor_id) %>%
+  #get the grouped n_distinct(fy)
+  summarize(loyal_years = n_distinct(fy)) %>%
+  ungroup() 
+
+#replace NA values with zeros
+we_final %<>%
+  left_join(., loyal_years) %>%
+  mutate(loyal_years = replace_na(loyal_years, replace = 0))
+```
+
+# Prepare Revised WE Export
+ID 
+ID 2
+Title
+First Name
+Middle Name
+Last Name
+Suffix
+Home Street 1
+Home Street 2
+City
+State
+MSA
+Zip_revised
+Home Country
+Birth Year
+Age
+Major Donor Model Score
+Loyalty Model Score
+Highest Model Score
+Lifetime Giving_revised
+Last 10 Years Giving_thru23
+Last 5 Years Giving_thru23
+First Gift Year_blank
+Last Gift Year_blank
+Assigned
+Manager
+Board
+Former Board
+Spouse ID
+Largest Transaction Amount
+Number of Transactions
+Number of Years Giving
+PG Indicator
+Constiuent Type
+Class Year
+Ever Board
+Classification 
+Status
+Monte Carlo ID
+Is Head of Household
+
+```{r prep for WE}
+we_final %<>%
+select(unique_donor_id,
+       account_id,
+       contact_id,
+         salutation, 
+         first_name,
+         middle_name,
+         last_name,
+         suffix,
+         billing_address,
+         address_2_final,
+         billing_city,
+         billing_state_province,
+         msa_name,
+         zip_clean,
+         country,
+         age_calculated,
+         mg_predict_ranks100, 
+         loyal_predict_ranks100, 
+         `Highest Model Score`,
+         total_lifetime_giving, 
+         total_giving_last_5y,
+         first_gift_date_final_cy, 
+         last_gift_date_final_cy, 
+         current_board,
+         former_board,
+         head_of_household,
+         largest_gift_final, 
+         total_number_of_gifts_final,
+         loyal_years,
+         account_record_type,
+         donor_type,
+         membership_binary,
+         has_been_an_nyrr_member_any_time_in_the_last_2_years,
+         runner_binary,
+         race_entrant_in_the_last_2_years,
+         did_open_run_in_the_last_2_years
+         ) %>%
+  mutate(across(salutation:suffix, str_to_title)) %>%
+  rename(
+         #"User Supplied ID" = "unique_donor_id", 
+         #"User Supplied ID 2" = "primary_family_id", 
+         "Title" = "salutation", 
+         "First Name" = "first_name",
+         "Middle Name" = "middle_name",
+         "Last Name" = "last_name",
+         "Suffix" = "suffix",
+         "Home Street 1" = "billing_address",
+         "Home Street 2" = "address_2_final",
+         "City" = "billing_city",
+         "State" = "billing_state_province",
+         "MSA" = "msa_name",
+         "Zip_revised" = "zip_clean",
+         "Home Country" = "country",
+         #"Birth Year" = "birth_date_cy",
+         "Age" = "age_calculated",
+         "Major Donor Model Score" = "mg_predict_ranks100",
+         "Loyalty Model Score" = "loyal_predict_ranks100",
+         "Lifetime Giving" = "total_lifetime_giving",
+         #"Last 10 Years Giving_thru23" = "total_giving_last_10y",
+         "Last 5 Years Giving_thru24" = "total_giving_last_5y",
+         "First Gift Year" = "first_gift_date_final_cy",
+         "Last Gift Year" = "last_gift_date_final_cy",
+         "Largest Transaction Amount" = "largest_gift_final",
+         "Number of Transactions" = "total_number_of_gifts_final",
+         "Number of Years Giving" = "loyal_years"#,
+         #"User Supplied Spouse ID" = "spouse_record_id"
+  ) %>%
+  mutate(
+    `Classification ` = NA,
+    `Status` = NA,
+    `Monte Carlo ID` = NA,
+    `User Supplied Spouse ID` = NA,
+    `User Supplied Spouse ID 2` = NA,
+    `Birth Year` = NA
+  ) %>%
+  #relocate(`Former Board`, .after = current_board_trustee_member) %>%
+  relocate(`Birth Year`, .before = Age) %>%
+  relocate(`User Supplied Spouse ID`, .after = former_board) %>%
+  relocate(`Home Street 2`, .after = `Home Street 1`) %>%
+  #relocate(`User Supplied ID 2`, .after = `User Supplied ID`) %>%
+  relocate(`User Supplied Spouse ID 2`, .after =`User Supplied Spouse ID`)
+	
+	
+write_csv(x = we_final, file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_we_screening_analysis.csv")))
+
+write.xlsx(x = we_final, file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_we_screening_analysis.xlsx")))
+```
+
+# Prepare WE export (OLD)
+
+```{r prep for WE}
+#confirm that this does not break
+we_final %<>%
+  select(unique_donor_id, 
+         prefix, 
+         first_name,
+         middle_name,
+         last_name,
+         suffix,
+         primary_address,
+         primary_city,
+         primary_state,
+         primary_zip,
+         birthdate,
+         spouse_record_id
+         ) %>%
+  mutate(across(prefix:suffix, str_to_title)) %>%
+  rename(
+         "User Supplied ID" = "unique_donor_id", 
+         "Prefix" = "prefix", 
+         "First Name" = "first_name",
+         "Middle Name" = "middle_name",
+         "Last Name" = "last_name",
+         "Suffix" = "suffix",
+         "Primary Address Line 1" = "primary_address",
+         "Primary Address City" = "primary_city",
+         "Primary Address State" = "primary_state",
+         "Primary Address Zip" = "primary_zip",
+         "Date of Birth" = "birthdate",
+         "User Supplied Spouse ID" = "spouse_record_id",
+  ) %>%
+  mutate(
+    `User Supplied ID 2` = NA,
+    `Primary Address Line 2` = NA,
+    `Total Giving` = NA,	
+    `Years Giving` = NA,	
+    `Number of Gifts` = NA,	
+    `Last Gift Amount` = NA,	
+    `Last Gift Date` = NA,	
+    `Largest Gift Amount` = NA,	
+    `Largest Gift Date` = NA,	
+    `Plannd Giving Flag` = NA,
+    `Age` = NA,
+  ) %>%
+  relocate(`Date of Birth`, .before = Age) %>%
+  relocate(`Primary Address Line 2`, .after = `Primary Address Line 1`) %>%
+  mutate(
+    `Phone` = NA,
+    `Business Phone` = NA,
+    `Business Name` = NA,
+    `User Supplied Spouse ID 2` = NA,
+    `Spouse First Name` = NA,
+    `Spouse Middle Name` = NA,
+    `Spouse Last Name` = NA,
+    `Attribute 1` = NA,	
+    `Attribute 2` = NA,	
+    `Attribute 3` = NA,	
+    `Attribute 4` = NA,	
+    `Attribute 5` = NA,	
+    `Attribute 6` = NA,	
+    `Attribute 7` = NA,	
+    `Attribute 8` = NA,	
+    `Attribute 9` = NA,	
+    `Attribute 10` = NA,	
+    `Attribute 11` = NA,	
+    `Attribute 12` = NA,	
+    `Attribute 13` = NA,	
+    `Attribute 14` = NA,	
+    `Attribute 15` = NA
+  ) %>%
+  relocate(`User Supplied ID 2`, .after = `User Supplied ID`) %>%
+  relocate(`User Supplied Spouse ID`, .before = `User Supplied Spouse ID 2`)
+	
+	
+write_csv(x = we_final, file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_we_screening.csv")))
+
+write.xlsx(x = we_final, file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_we_screening.xlsx")))
+
+```
+
+## Read in the WE screened file
+```{r read in we screened file}
+we_screen <- read_excel(path = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Deliverables", "Final Deliverables for FTP", paste0(proj_dir, " Screening Results.xlsx")), .name_repair = make_clean_names)
+
+#filter for fields we want
+we_screen %<>%
+  select(id, #constituent_id
+         age,
+         date_of_birth,
+         gift_capacity_range,
+         gift_capacity_rating,
+         deceased_indicator
+         ) %>%
+  mutate(date_of_birth = as_date(date_of_birth))
+
+#the query
+we_query <- read_csv(file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_we_screening.csv"))) %>%
+  distinct()
+
+we <- we_query %>%
+  select(
+    "User Supplied ID":"Primary Address Zip"
+  ) %>%
+  left_join(we_screen, ., by = c("id" = "User Supplied ID"))
+```
+
+A. Wealth screening fields
+  - age
+  - date of birth
+  - gift capacity range
+  - gift capacity rating
+  - deceased indicator
+  
+## Read in the modeling and constit files
+
+### Generate model scores file
+
+```{r read in modeling and constit files}
+#model file
+modeling <- read_csv(file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_mg_loyal.csv")))
+
+#write out just the model scores and constituent IDs
+modeling %>%
+  select(constituentlookupid, 
+         mg_predict_ranks1000, 
+         loyal_predict_ranks1000
+         ) %>%
+  rename(
+      "Major Donor Model Score (MLR)" = mg_predict_ranks1000,
+    "Loyalty Model Score (MLR)" = loyal_predict_ranks1000
+) %>%
+  write.xlsx(x = ., file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_model_scores.xlsx")))
+
+```
+
+### Bring cleaned constit file back in for pertinent fields
+
+```{r read in constit clean for joining fields of interest}
+#constit file
+constit_clean <- vroom(file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Data Validation Work", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_constit_clean.csv")), 
+                      col_types = cols(
+                                       .default = col_character()
+                                      ), 
+                      guess_max = 1e6
+                      )
+
+#trim fields
+modeling %<>%
+  select(
+    unique_donor_id,
+    loyal_predict:loyal_predict_xgb_ranks1000,
+    mg_predict:mg_predict_xgb_ranks1000
+  )
+
+constit_clean %<>%
+  select(
+    unique_donor_id,
+    zip_clean,
+    country,
+    total_lifetime_giving,
+    fy23totalgivingamount:fy13totalgivingamount,
+    first_gift_date,
+    last_gift_date,
+    largest_gift_amount,
+    assigned_manager_final,
+    spouselookupid,
+    lifetimegiftcount
+  )
+
+#combine the cleaned
+model_constit <- left_join(modeling, constit_clean)
+```
+
+```{r combine with we}
+model_constit_we <- left_join(we, model_constit, by = c("id" = "unique_donor_id"))
+```
+
+## Connect MSA data to constit_clean object
+```{r}
+#bring in the data we have 
+data(msa, package = "ccsfun")
+
+#join the two for easy join to the full dataset
+# note that msa data has more zip codes covered, so it is the origin of the join
+model_constit_we <- left_join(model_constit_we, msa, by = c("zip_clean" = "zip_code")) %>%
+  select(-msa_num, -state)
+```
+
+## Get number of years with giving from constituent file last ten years
+
+```{r get loyal 10 years}
+  #calculate out last 10 years number of giving
+loyal_years10 <- model_constit_we %>%
+  #select just the fields we need for getting these values
+  select(id, fy22totalgivingamount:fy13totalgivingamount) %>%
+  #pivot long for the FY giving
+  pivot_longer(cols = fy22totalgivingamount:fy13totalgivingamount, names_to = "fy") %>%
+  #replace the fy extra text
+  mutate(fy = str_remove_all(pattern = "totalgivingamount", string = fy)) %>%
+  mutate(fy = str_remove_all(pattern = "^fy", string = fy)) %>%
+  #make numeric
+  mutate(fy = as.numeric(fy)) %>%
+  #filter for the set of last ten years based on max FY value - 10
+  filter(fy <= max(fy) & fy > (max(fy) - 10)) %>%
+  #filter for value > 0
+  filter(value > 0) %>%
+  #group by uniquedonorid
+  group_by(id) %>%
+  #get the grouped n_distinct(fy)
+  summarize(loyal_years = n_distinct(fy)) %>%
+  ungroup() 
+
+model_constit_we %<>%
+  left_join(., loyal_years10) %>%
+  mutate(loyal_years = replace_na(loyal_years, replace = 0))
+```
+
+B. Modeling/Constituent File and Wealth screening prepared fields
+  - ID 1	
+  - Title	
+  - First Name	
+  - Last Name	
+  - Mailing Street
+  - City	
+  - State	
+  - Zip_revised	
+  - Mailing Country
+  - Major Donor Model Score	
+  - Loyalty Model Score	
+  - Highest Model Score	
+  - MSA
+  - Total Lifetime Giving	
+  - Last 10 Years Giving_thru23 # HERE WILL BE 2022	
+  - Last 5 Years Giving_thru23	# HERE WILL BE 2022	
+  - First Gift Date	
+  - Last Gift Date	
+  - Assigned Manager	
+  - Board Member	
+  - Former Board    
+  - SP ID 1	(SPOUSE ID)
+  - Moves Management Fields	#NONE HERE
+  - OpportunityRecordType	(PROSPECT TYPE) #PRIMARY CONSTITUENCY
+  - Largest Gift
+  - Total Number of Gifts	
+  - Number of Years Given (out of 10)	
+  - PG Indicator
+
+```{r reorder for easy save}
+model_constit_we_final <- model_constit_we %>%
+  #make yoy giving numeric
+  mutate(across(.cols = matches(match = paste((fy_ends[[2]]-2009):(fy_ends[[2]] - 2000), collapse = "|")), .fns = as.numeric)) %>%
+  #calculate 10 and 5 year giving
+  mutate(
+  #Total Last 5 years giving
+    total_giving_last_5y = rowSums(across(.cols = matches(match = paste((fy_ends[[2]]-2004):(fy_ends[[2]] - 2000), collapse = "|"))), na.rm = TRUE), 
+  #total last 10 years giving
+    total_giving_last_10y = rowSums(across(.cols = matches(match = paste((fy_ends[[2]]-2009):(fy_ends[[2]] - 2000), collapse = "|"))), na.rm = TRUE)
+    ) %>%
+  select(
+    age,
+    date_of_birth,
+    gift_capacity_range,
+    gift_capacity_rating,
+    deceased_indicator,
+    id,
+    Prefix, #rename title
+    `First Name`,
+    `Last Name`,
+    `Primary Address Line 1`,
+    `Primary Address Line 2`,
+    `Primary Address City`,    
+    `Primary Address State`,
+    `Primary Address Zip`,
+    zip_clean,
+    country, #rename
+    mg_predict_ranks1000, #rename
+    loyal_predict_ranks1000, #rename
+    msa_name,
+    lifetime_total_giving,
+    plannedgifttotalgiving,
+    total_giving_last_10y,
+    total_giving_last_5y,
+    first_gift_date,
+    last_gift_date,
+    board_member_binary,
+    spouselookupid,
+    assigned_manager_final, #rename
+    #constituent types
+    pg_legacy_interest_binary,
+    volunteer_binary,
+    largest_gift_amount,
+    lifetimegiftcount, 
+    loyal_years
+    ) %>%
+  #get best model score and create new field
+  rowwise() %>%
+  mutate(`Highest Model Score` = max(mg_predict_ranks1000, loyal_predict_ranks1000, na.rm = TRUE)) %>%
+  ungroup() %>%
+  #mutate the unmodeled non-giving assigned constituents
+  mutate(`Highest Model Score` = case_when(
+    is.infinite(`Highest Model Score`) ~ NA_real_,
+    TRUE ~ `Highest Model Score`
+  )) %>%
+  relocate(`Highest Model Score`, .after = loyal_predict_ranks1000) %>%
+  #rename some things
+  rename(
+    "Country" = country,
+    "Title" = Prefix,
+    "Major Donor Model Score (MLR)" = mg_predict_ranks1000,
+    "Loyalty Model Score (MLR)" = loyal_predict_ranks1000,
+    "Number of Years Given (out of 10)" = loyal_years,
+    "Assigned Prospect Manager" = assigned_manager_final
+  ) %>%
+  #fix WE dates
+  mutate(across(.cols = matches(match = "date", ignore.case = TRUE), .fns = ~str_extract(pattern = "[0-9]{2,4}.[0-9]{2,4}.[0-9]{2,4}", string = .x)))
+
+```
+
+# Write out report output
+```{r}
+write_csv(x = model_constit_we_final, file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_for_analysis.csv")))
+
+write.xlsx(x = model_constit_we_final, file = file.path(onedrive_dir, "1. Shared Drive", "Clients", proj_dir, "Data- Analyze & Prescribe", "Analysis", "Modeling Files", paste0(gsub(x = tolower(proj_dir), pattern = " ", replacement = "_"), "_for_analysis.xlsx")))
+```
