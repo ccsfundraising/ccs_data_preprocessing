@@ -340,12 +340,13 @@ df_cd_sample <- read.csv("C:/Users/Lvu/Internal - Analytics/constituents_raw_dat
                          encoding="ISO-8859-1")
 
 # Set the Python environment
-virtualenv_path <- "C:/Users/Lvu/git/ccs_data_preprocessing/.py3117_preprocessing"
+# virtualenv_path <- "C:/Users/Lvu/git/ccs_data_preprocessing/.py3117_preprocessing"
+virtualenv_path <- "./.py3117_preprocessing"
 Sys.setenv(RETICULATE_PYTHON = file.path(virtualenv_path, "Scripts/python.exe"))
 use_virtualenv(virtualenv_path, required = TRUE)
 
 # Source the Python script
-source_python("C:/Users/Lvu/git/data_profiling.py")
+source_python("./data_profiling.py")
 
 # Call the Python function
 py$generate_profile_report()
