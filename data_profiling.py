@@ -5,14 +5,10 @@ import random
 from ydata_profiling import ProfileReport
 import matplotlib.pyplot as plt
 
-def generate_profile_report():
-    # Define the path and filename
-    path = "C:/Users/Lvu/Internal - Analytics/"
-    filename = "constituents_sample_data.csv"
-    file = f"{path}/{filename}"
+def generate_profile_report(file_path):
 
     # Load the dataset
-    df_cd = pd.read_csv(file)
+    df_cd = pd.read_csv(file_path)
 
     # Generate the profile report
     profile = ProfileReport(
@@ -58,8 +54,8 @@ def generate_profile_report():
         
 #         profile.to_file("constituents_sample_data_report.html")
 
-if __name__ == "__main__":
-    generate_profile_report()
+# if __name__ == "__main__":
+#     generate_profile_report()
 
     # Set sample to True if we want to generate the report using a sample of the dataset
     # generate_profile_report_large(sample=True)
