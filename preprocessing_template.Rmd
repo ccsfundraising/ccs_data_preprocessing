@@ -336,40 +336,17 @@ df_cd <- read.csv(file, encoding="ISO-8859-1")
 ```
 
 ```{r}
-# # install.packages("reticulate")
-# library(reticulate)
-# 
-# ## Specify the path to the virtual environment
-# virtualenv_path <- "./.py3117_preprocessing"
-# use_virtualenv(virtualenv_path, required = TRUE)
-# 
-# ## Source the Python script
-# source_python("./data_profiling.py")
-# 
-# ## Define the file path to be passed to the Python function
-# file_path <- "./constituents_sample_data.csv"
-# 
-# # Call the Python function with the specified file path
-# py$generate_profile_report(file_path)
-```
-
-```{r}
+# install.packages("reticulate")
 library(reticulate)
 
-# Define the path to the virtual environment
-virtualenv_path <- "./.py3117_preprocessing"
+# Create a virtual environment
+virtualenv_create("reticulate_preprocessing")
 
-# Check if the virtual environment exists, if not create it
-if (!dir.exists(virtualenv_path)) {
-  # Create the virtual environment
-  virtualenv_create(virtualenv_path, python = "python")
-  
-  # Install required packages from requirements.txt
-  virtualenv_install(virtualenv_path, packages = c("numpy", "pandas", "ydata_profiling"))
-}
+# Install required Python libraries
+virtualenv_install("reticulate_preprocessing", requirements = "./requirements.txt")
 
-# Use the virtual environment
-use_virtualenv(virtualenv_path, required = TRUE)
+# Specify the path to the virtual environment
+use_virtualenv("reticulate_preprocessing", required = TRUE)
 
 # Source the Python script
 source_python("./data_profiling.py")
@@ -379,8 +356,7 @@ file_path <- "./constituents_sample_data.csv"
 
 # Call the Python function with the specified file path
 py$generate_profile_report(file_path)
-``` 
-
+```
 
 # Formatting
 
