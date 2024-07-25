@@ -379,7 +379,7 @@ file_path <- "./constituents_sample_data.csv"
 
 # Call the Python function with the specified file path
 py$generate_profile_report(file_path)
-```
+``` 
 
 
 # Formatting
