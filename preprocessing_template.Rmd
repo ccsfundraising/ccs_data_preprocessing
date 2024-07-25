@@ -336,17 +336,6 @@ df_cd <- read.csv(file, encoding="ISO-8859-1")
 ```
 
 ```{r}
-# # install.packages("renv")
-# library(renv)
-# 
-# ## Initialize renv
-# renv::init()
-# 
-# ## Save the R packages used
-# renv::snapshot()
-# 
-# # renv::dependencies()
-# 
 # # install.packages("reticulate")
 # library(reticulate)
 # 
@@ -362,28 +351,6 @@ df_cd <- read.csv(file, encoding="ISO-8859-1")
 # 
 # # Call the Python function with the specified file path
 # py$generate_profile_report(file_path)
-```
-
-```{r}
-install.packages("renv")
-
-## Restore the R environment
-renv::restore()
-
-library(reticulate)
-
-## Specify the path to the virtual environment
-venv_path <- file.path(getwd(), ".py3117_preprocessing")
-use_virtualenv(venv_path, required = TRUE)
-
-## Source the Python script
-source_python("./data_profiling.py")
-
-## Define the file path to be passed to the Python function
-file_path <- "./constituents_sample_data.csv"
-
-# Call the Python function with the specified file path
-py$generate_profile_report(file_path)
 ```
 
 
