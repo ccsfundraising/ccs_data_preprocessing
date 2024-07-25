@@ -323,27 +323,24 @@ save_file(df_gd, save_gifts_after_mapping)
 # Constituents Data
 
 ```{r}
-file_name <- "constituents_raw_data.csv"
-file <- file.path(file_path, file_name)
-df_cd <- read.csv(file, encoding="ISO-8859-1")
+# file_name <- "constituents_raw_data.csv"
+# file <- file.path(file_path, file_name)
+# df_cd <- read.csv(file, encoding="ISO-8859-1")
+
+df_cd <- read.csv("C:/Users/Lvu/Internal - Analytics/constituents_sample_data.csv", encoding="ISO-8859-1")
 ```
 
 ## Run the python script function
-
-```{r}
-# Read the sample data 
-# df_cd_sample <- read.csv("./constituents_raw_data.csv", encoding="ISO-8859-1")
-```
 
 ```{r}
 # install.packages("reticulate")
 library(reticulate)
 
 # Create a virtual environment
-virtualenv_create("reticulate_preprocessing")
+# virtualenv_create("reticulate_preprocessing")
 
 # Install required Python libraries
-virtualenv_install("reticulate_preprocessing", requirements = "./requirements.txt")
+# virtualenv_install("reticulate_preprocessing", requirements = "./requirements.txt")
 
 # Specify the path to the virtual environment
 use_virtualenv("reticulate_preprocessing", required = TRUE)
@@ -351,11 +348,8 @@ use_virtualenv("reticulate_preprocessing", required = TRUE)
 # Source the Python script
 source_python("./data_profiling.py")
 
-# Define the file path to be passed to the Python function
-file_path <- "./constituents_sample_data.csv"
-
 # Call the Python function with the specified file path
-py$generate_profile_report(file_path)
+py$generate_profile_report(df_cd)
 ```
 
 # Formatting

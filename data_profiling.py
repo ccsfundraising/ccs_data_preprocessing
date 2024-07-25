@@ -5,10 +5,7 @@ import random
 from ydata_profiling import ProfileReport
 import matplotlib.pyplot as plt
 
-def generate_profile_report(file_path):
-
-    # Load the dataset
-    df_cd = pd.read_csv(file_path)
+def generate_profile_report(df_cd):
 
     # Generate the profile report
     profile = ProfileReport(
