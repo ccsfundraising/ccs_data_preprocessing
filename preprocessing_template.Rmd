@@ -373,7 +373,7 @@ renv::restore()
 library(reticulate)
 
 ## Specify the path to the virtual environment
-venv_path <- file.path(getwd(), ".venv")
+venv_path <- file.path(getwd(), ".py3117_preprocessing")
 use_virtualenv(venv_path, required = TRUE)
 
 ## Source the Python script
