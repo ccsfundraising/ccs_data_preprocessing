@@ -40,10 +40,12 @@
       <br/><br/>
       
 
-### Clone the git repository you need to git clone by typing the following in your terminal:
+### Clone the git repository you need to git clone by typing the repository link in your terminal:
 
 Open a terminal on RStudio or VSCode. Go to your home directory and type the following command. Enter "yes" when it ask you for a confirmation.
 
 ```
+git clone git@github.com:ccsfundraising/{repository_name}.git
+# As an example
 git clone git@github.com:ccsfundraising/ccs_predictive_modeling.git
 ```
