@@ -47,5 +47,5 @@ Open a terminal on RStudio or VSCode. Go to your home directory and type the fol
 ```
 git clone git@github.com:ccsfundraising/{repository_name}.git
 # As an example
-git clone git@github.com:ccsfundraising/ccs_predictive_modeling.git
+git clone git@github.com:ccsfundraising/ccs_data_preprocessing.git
 ```
